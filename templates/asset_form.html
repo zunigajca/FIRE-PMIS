@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ title }}
+{% endblock %}
+
+{% block content %}
+
+<h1>{{ title }}</h1>
+
+<div class="panel">
+
+<form method="POST">
+
+<label>Asset ID</label>
+
+<input
+type="text"
+name="asset_id"
+value="{{ asset.asset_id if asset else '' }}"
+{% if asset %}readonly{% endif %}
+required>
+
+<label>Location</label>
+
+<input
+type="text"
+name="location"
+value="{{ asset.location if asset else '' }}"
+required>
+
+<label>Type</label>
+
+<input
+type="text"
+name="type"
+value="{{ asset.type if asset else '' }}"
+required>
+
+<label>Capacity (kg)</label>
+
+<input
+type="number"
+step="0.1"
+name="capacity_kg"
+value="{{ asset.capacity_kg if asset else '' }}"
+required>
+
+<label>Manufacture Date</label>
+
+<input
+type="date"
+name="manufacture_date"
+value="{{ asset.manufacture_date if asset else '' }}"
+required>
+
+<label>Expiry Date</label>
+
+<input
+type="date"
+name="expiry_date"
+value="{{ asset.expiry_date if asset else '' }}"
+required>
+
+<label>Last Inspection</label>
+
+<input
+type="date"
+name="last_inspection"
+value="{{ asset.last_inspection if asset else '' }}"
+required>
+
+<div class="actions">
+
+<button type="submit">
+
+Save
+
+</button>
+
+<a href="{{ url_for('assets') }}" class="button secondary">
+
+Cancel
+
+</a>
+
+</div>
+
+</form>
+
+</div>
+
+{% endblock %}

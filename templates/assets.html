@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}
+Assets
+{% endblock %}
+
+{% block content %}
+
+<h1>Fire Extinguisher Assets</h1>
+
+<div class="toolbar">
+
+    <form class="search-form" method="GET" action="{{ url_for('assets') }}">
+
+        <input
+            type="text"
+            name="q"
+            placeholder="Search Asset ID, Location or Type"
+            value="{{ query or '' }}">
+
+        <button type="submit">
+            Search
+        </button>
+
+    </form>
+
+    <a href="{{ url_for('add_asset_page') }}" class="button">
+        + Add Asset
+    </a>
+
+</div>
+
+<div class="panel">
+
+    <table>
+
+        <thead>
+
+            <tr>
+                <th>Asset ID</th>
+                <th>Location</th>
+                <th>Type</th>
+                <th>Capacity</th>
+                <th>Expiry Date</th>
+                <th>Last Inspection</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+        {% if assets %}
+
+            {% for asset in assets %}
+
+            <tr>
+
+                <td>{{ asset.asset_id }}</td>
+
+                <td>{{ asset.location }}</td>
+
+                <td>{{ asset.type }}</td>
+
+                <td>{{ asset.capacity_kg }} kg</td>
+
+                <td>{{ asset.expiry_date }}</td>
+
+                <td>{{ asset.last_inspection }}</td>
+
+                <td>
+
+                    {% if asset.expiry_date < "2026-01-01" %}
+
+                        <span class="badge expired">
+                            Expired
+                        </span>
+
+                    {% elif asset.expiry_date < "2026-04-01" %}
+
+                        <span class="badge urgent">
+                            Urgent
+                        </span>
+
+                    {% elif asset.expiry_date < "2026-07-01" %}
+
+                        <span class="badge plan">
+                            Plan
+                        </span>
+
+                    {% else %}
+
+                        <span class="badge good">
+                            Healthy
+                        </span>
+
+                    {% endif %}
+
+                </td>
+
+                <td>
+
+                    <div class="action-buttons">
+
+                        <a
+                            href="{{ url_for('edit_asset_page', asset_id=asset.asset_id) }}"
+                            class="button edit-btn">
+
+                            Edit
+
+                        </a>
+
+                        <a
+                            href="{{ url_for('delete_asset_page', asset_id=asset.asset_id) }}"
+                            class="button delete-btn"
+                            onclick="return confirm('Delete this asset?');">
+
+                            Delete
+
+                        </a>
+
+                    </div>
+
+                </td>
+
+            </tr>
+
+            {% endfor %}
+
+        {% else %}
+
+            <tr>
+
+                <td colspan="8" style="text-align:center;padding:30px;">
+
+                    No matching assets found.
+
+                </td>
+
+            </tr>
+
+        {% endif %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+{% endblock %}
