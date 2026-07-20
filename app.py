@@ -24,6 +24,14 @@ def db():
     return g.db
 
 
+def ensure_table_columns(connection, table_name, columns):
+    existing_columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()}
+    for column_sql in columns:
+        column_name = column_sql.split()[0]
+        if column_name not in existing_columns:
+            connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_sql}")
+
+
 @app.teardown_appcontext
 def close_db(_error=None):
     connection = g.pop("db", None)
@@ -35,28 +43,111 @@ def init_db():
     connection = db()
     connection.executescript("""
         CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS equipment (id INTEGER PRIMARY KEY, asset_code TEXT UNIQUE NOT NULL, name TEXT NOT NULL, category TEXT NOT NULL, location TEXT NOT NULL, purchase_date TEXT, operational_status TEXT NOT NULL, notes TEXT, created_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS inspections (id INTEGER PRIMARY KEY, equipment_id INTEGER NOT NULL, inspection_date TEXT NOT NULL, condition TEXT NOT NULL, findings TEXT, inspector TEXT NOT NULL, next_due_date TEXT, FOREIGN KEY(equipment_id) REFERENCES equipment(id) ON DELETE CASCADE);
-        CREATE TABLE IF NOT EXISTS maintenance (id INTEGER PRIMARY KEY, equipment_id INTEGER NOT NULL, maintenance_date TEXT NOT NULL, maintenance_type TEXT NOT NULL, description TEXT NOT NULL, parts_replaced TEXT, assigned_personnel TEXT NOT NULL, cost REAL DEFAULT 0, FOREIGN KEY(equipment_id) REFERENCES equipment(id) ON DELETE CASCADE);
-        CREATE TABLE IF NOT EXISTS usage_logs (id INTEGER PRIMARY KEY, equipment_id INTEGER NOT NULL, usage_date TEXT NOT NULL, deployment_count INTEGER NOT NULL DEFAULT 0, operating_hours REAL NOT NULL DEFAULT 0, purpose TEXT, recorded_by TEXT NOT NULL, FOREIGN KEY(equipment_id) REFERENCES equipment(id) ON DELETE CASCADE);
+        CREATE TABLE IF NOT EXISTS equipment (
+            id INTEGER PRIMARY KEY,
+            asset_code TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            location TEXT NOT NULL,
+            purchase_date TEXT,
+            operational_status TEXT NOT NULL,
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            serial_number TEXT,
+            manufacturer TEXT,
+            model TEXT,
+            warranty_expiry TEXT,
+            supplier TEXT,
+            purchase_cost REAL DEFAULT 0,
+            service_interval_days INTEGER DEFAULT 0,
+            criticality TEXT DEFAULT 'Standard'
+        );
+        CREATE TABLE IF NOT EXISTS inspections (
+            id INTEGER PRIMARY KEY,
+            equipment_id INTEGER NOT NULL,
+            inspection_date TEXT NOT NULL,
+            condition TEXT NOT NULL,
+            findings TEXT,
+            inspector TEXT NOT NULL,
+            next_due_date TEXT,
+            severity_level TEXT DEFAULT 'Normal',
+            FOREIGN KEY(equipment_id) REFERENCES equipment(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS maintenance (
+            id INTEGER PRIMARY KEY,
+            equipment_id INTEGER NOT NULL,
+            maintenance_date TEXT NOT NULL,
+            maintenance_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            parts_replaced TEXT,
+            assigned_personnel TEXT NOT NULL,
+            cost REAL DEFAULT 0,
+            work_order_no TEXT,
+            status TEXT DEFAULT 'Completed',
+            FOREIGN KEY(equipment_id) REFERENCES equipment(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS usage_logs (
+            id INTEGER PRIMARY KEY,
+            equipment_id INTEGER NOT NULL,
+            usage_date TEXT NOT NULL,
+            deployment_count INTEGER NOT NULL DEFAULT 0,
+            operating_hours REAL NOT NULL DEFAULT 0,
+            purpose TEXT,
+            recorded_by TEXT NOT NULL,
+            trip_type TEXT DEFAULT 'Routine',
+            FOREIGN KEY(equipment_id) REFERENCES equipment(id) ON DELETE CASCADE
+        );
     """)
+    ensure_table_columns(connection, "equipment", [
+        "serial_number TEXT",
+        "manufacturer TEXT",
+        "model TEXT",
+        "warranty_expiry TEXT",
+        "supplier TEXT",
+        "purchase_cost REAL DEFAULT 0",
+        "service_interval_days INTEGER DEFAULT 0",
+        "criticality TEXT DEFAULT 'Standard'",
+    ])
+    ensure_table_columns(connection, "inspections", [
+        "severity_level TEXT DEFAULT 'Normal'",
+    ])
+    ensure_table_columns(connection, "maintenance", [
+        "work_order_no TEXT",
+        "status TEXT DEFAULT 'Completed'",
+    ])
+    ensure_table_columns(connection, "usage_logs", [
+        "trip_type TEXT DEFAULT 'Routine'",
+    ])
     connection.execute("INSERT OR IGNORE INTO users(username,password_hash,role) VALUES (?,?,?)", ("admin", generate_password_hash("admin123"), "Administrator"))
     connection.execute("INSERT OR IGNORE INTO users(username,password_hash,role) VALUES (?,?,?)", ("maintenance", generate_password_hash("maintenance123"), "Maintenance Personnel"))
     connection.execute("INSERT OR IGNORE INTO users(username,password_hash,role) VALUES (?,?,?)", ("supervisor", generate_password_hash("supervisor123"), "Station Supervisor"))
-    if not connection.execute("SELECT 1 FROM equipment LIMIT 1").fetchone():
+
+    existing_count = connection.execute("SELECT COUNT(*) FROM equipment").fetchone()[0]
+    if existing_count < 8:
         today = date.today()
         samples = [
-            ("ENG-001", "Fire Engine 1", "Fire Engine", "BFP Sta. Ana Garage", "2020-01-15", "Operational", "Primary response vehicle"),
-            ("PMP-002", "Portable Water Pump", "Water Pump", "Equipment Bay", "2021-06-20", "Operational", "For flood and fire support"),
-            ("BA-003", "SCBA Unit 3", "Breathing Apparatus", "PPE Room", "2022-03-10", "Operational", "Self-contained breathing apparatus"),
-            ("TOOL-004", "Hydraulic Rescue Tool", "Critical Tool", "Rescue Locker", "2019-11-05", "Under Maintenance", "Awaiting hose inspection"),
+            ("ENG-001", "Fire Engine 1", "Fire Engine", "BFP Sta. Ana Garage", "2020-01-15", "Operational", "Primary response vehicle", "SN-ENG-001", "Phoenix Motors", "Model X12", "2027-01-15", "BFP Supplies", 420000.0, 180, "Critical"),
+            ("PMP-002", "Portable Water Pump", "Water Pump", "Equipment Bay", "2021-06-20", "Operational", "For flood and fire support", "SN-PMP-002", "HydraTech", "WT-220", "2026-06-20", "Municipal Logistics", 120000.0, 90, "Standard"),
+            ("BA-003", "SCBA Unit 3", "Breathing Apparatus", "PPE Room", "2022-03-10", "Operational", "Self-contained breathing apparatus", "SN-BA-003", "AeroSafe", "SCBA-3", "2028-03-10", "Fire Protection Depot", 45000.0, 60, "High"),
+            ("TOOL-004", "Hydraulic Rescue Tool", "Critical Tool", "Rescue Locker", "2019-11-05", "Under Maintenance", "Awaiting hose inspection", "SN-TOOL-004", "RescueMax", "RHT-9", "2025-11-05", "Emergency Gear Supply", 78000.0, 30, "Critical"),
+            ("ENG-005", "Fire Engine 5", "Fire Engine", "Dispatch Yard", "2018-05-12", "Operational", "Reserve response vehicle", "SN-ENG-005", "Ranger Motors", "RM-780", "2026-05-12", "Metro Fire Depot", 510000.0, 210, "Critical"),
+            ("PMP-006", "Portable Water Pump 6", "Water Pump", "Operations Storage", "2023-02-14", "Under Maintenance", "Routine pump test backlog", "SN-PMP-006", "FlowMax", "PM-404", "2028-02-14", "Water Support Services", 99000.0, 120, "Standard"),
+            ("BA-007", "SCBA Unit 7", "Breathing Apparatus", "Respiratory Locker", "2021-09-18", "Operational", "Used for smoke-diving drills", "SN-BA-007", "AeroSafe", "SCBA-7", "2027-09-18", "Emergency PPE Supply", 52000.0, 45, "High"),
+            ("TOOL-008", "Portable Cutter Set", "Critical Tool", "Rescue Bay", "2020-11-01", "Out of Service", "Battery pack replacement pending", "SN-TOOL-008", "CutPro", "CP-21", "2025-11-01", "Rescue gear vendor", 63000.0, 25, "Critical"),
         ]
         for sample in samples:
-            cur = connection.execute("INSERT INTO equipment(asset_code,name,category,location,purchase_date,operational_status,notes,created_at) VALUES (?,?,?,?,?,?,?,?)", (*sample, today.isoformat()))
-            equipment_id = cur.lastrowid
-            condition = "Needs Repair" if sample[0] == "TOOL-004" else "Good"
-            connection.execute("INSERT INTO inspections(equipment_id,inspection_date,condition,findings,inspector,next_due_date) VALUES (?,?,?,?,?,?)", (equipment_id, (today-timedelta(days=35 if sample[0] == "TOOL-004" else 12)).isoformat(), condition, "Hydraulic hose shows wear" if condition != "Good" else "No defects noted", "Maintenance Officer", (today+timedelta(days=20 if sample[0] == "TOOL-004" else 78)).isoformat()))
-            connection.execute("INSERT INTO usage_logs(equipment_id,usage_date,deployment_count,operating_hours,purpose,recorded_by) VALUES (?,?,?,?,?,?)", (equipment_id, (today-timedelta(days=7)).isoformat(), 7 if sample[0] == "TOOL-004" else 2, 18 if sample[0] == "TOOL-004" else 4, "Training / response readiness", "Maintenance Officer"))
+            connection.execute(
+                "INSERT OR IGNORE INTO equipment(asset_code,name,category,location,purchase_date,operational_status,notes,created_at,serial_number,manufacturer,model,warranty_expiry,supplier,purchase_cost,service_interval_days,criticality) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (*sample, today.isoformat())
+            )
+            equipment_id = connection.execute("SELECT id FROM equipment WHERE asset_code=?", (sample[0],)).fetchone()[0]
+            if not connection.execute("SELECT 1 FROM inspections WHERE equipment_id=? LIMIT 1", (equipment_id,)).fetchone():
+                condition = "Needs Repair" if sample[0] in {"TOOL-004", "TOOL-008"} else "Good"
+                connection.execute("INSERT INTO inspections(equipment_id,inspection_date,condition,findings,inspector,next_due_date,severity_level) VALUES (?,?,?,?,?,?,?)", (equipment_id, (today-timedelta(days=35 if sample[0] in {"TOOL-004", "TOOL-008"} else 12)).isoformat(), condition, "Hydraulic hose shows wear" if sample[0] == "TOOL-004" else "Battery pack replacement pending" if sample[0] == "TOOL-008" else "No defects noted", "Maintenance Officer", (today+timedelta(days=20 if sample[0] in {"TOOL-004", "TOOL-008"} else 78)).isoformat(), "High" if condition != "Good" else "Normal"))
+            if not connection.execute("SELECT 1 FROM maintenance WHERE equipment_id=? LIMIT 1", (equipment_id,)).fetchone():
+                connection.execute("INSERT INTO maintenance(equipment_id,maintenance_date,maintenance_type,description,parts_replaced,assigned_personnel,cost,work_order_no,status) VALUES (?,?,?,?,?,?,?,?,?)", (equipment_id, (today-timedelta(days=5 if sample[0] in {"TOOL-004", "TOOL-008"} else 18)).isoformat(), "Corrective Repair" if sample[0] in {"TOOL-004", "TOOL-008"} else "Preventive", "Service record" if sample[0] not in {"TOOL-004", "TOOL-008"} else "Field repair and parts replacement", "Hydraulic hose set" if sample[0] == "TOOL-004" else "Battery pack" if sample[0] == "TOOL-008" else "Filter cartridge", "Maintenance Officer", 3500 if sample[0] in {"TOOL-004", "TOOL-008"} else 1200, f"WO-{sample[0]}", "Completed"))
+            if not connection.execute("SELECT 1 FROM usage_logs WHERE equipment_id=? LIMIT 1", (equipment_id,)).fetchone():
+                connection.execute("INSERT INTO usage_logs(equipment_id,usage_date,deployment_count,operating_hours,purpose,recorded_by,trip_type) VALUES (?,?,?,?,?,?,?)", (equipment_id, (today-timedelta(days=7)).isoformat(), 7 if sample[0] in {"TOOL-004", "TOOL-008"} else 2, 18 if sample[0] in {"TOOL-004", "TOOL-008"} else 4, "Training / response readiness", "Maintenance Officer", "Emergency" if sample[0] in {"TOOL-004", "TOOL-008"} else "Routine"))
     connection.commit()
 
 
@@ -142,8 +233,21 @@ def equipment_list():
 def add_equipment():
     if request.method == "POST":
         values = [request.form[x].strip() for x in ("asset_code", "name", "category", "location", "purchase_date", "operational_status", "notes")]
+        extra_values = [
+            request.form.get("serial_number", "").strip(),
+            request.form.get("manufacturer", "").strip(),
+            request.form.get("model", "").strip(),
+            request.form.get("warranty_expiry", "").strip(),
+            request.form.get("supplier", "").strip(),
+            request.form.get("purchase_cost", "") or 0,
+            request.form.get("service_interval_days", "") or 0,
+            request.form.get("criticality", "Standard").strip() or "Standard",
+        ]
         try:
-            db().execute("INSERT INTO equipment(asset_code,name,category,location,purchase_date,operational_status,notes,created_at) VALUES (?,?,?,?,?,?,?,?)", (*values, date.today().isoformat()))
+            db().execute(
+                "INSERT INTO equipment(asset_code,name,category,location,purchase_date,operational_status,notes,created_at,serial_number,manufacturer,model,warranty_expiry,supplier,purchase_cost,service_interval_days,criticality) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (*values, date.today().isoformat(), *extra_values)
+            )
             db().commit(); flash("Equipment registered successfully.", "success")
             return redirect(url_for("equipment_list"))
         except sqlite3.IntegrityError:
