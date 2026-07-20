@@ -1,37 +1,31 @@
-# FIRE-PMIS (Fire Extinguisher Predictive Maintenance Information System)
+# FIRE-PMIS
 
-## Overview
-FIRE-PMIS is a web-based capstone project designed to monitor fire prevention equipment, manage inspection records, and provide predictive maintenance recommendations based on equipment condition and expiration dates.
+FIRE-PMIS is a web-based predictive maintenance information system for BFP Sta. Ana, Manila. It centralizes equipment records and the manually entered inspection, maintenance, and usage histories required for maintenance decision support.
 
-## Features
-* **Dashboard:** At-a-glance metrics of equipment status.
-* **Asset Management:** Track and manage fire extinguishers and prevention equipment.
-* **Inspection Management:** Log and monitor regular equipment inspection records.
-* **Predictive Maintenance:** Smart recommendations driven by equipment condition and expiration milestones.
-* **Analytics Dashboard:** Graphical insights into asset health.
-* **Reports:** Generate and export system reports.
+## Delivered capstone scope
 
-## Technologies Used
-* **Backend:** Python, Flask
-* **Frontend:** HTML5, CSS3, JavaScript, Chart.js
-* **Database:** JSON (Prototype Database)
+- Role-based login for Administrator, Maintenance Personnel, and Station Supervisor accounts.
+- Centralized registry for fire engines, water pumps, breathing apparatus, critical tools, and other equipment.
+- Per-equipment inspection, maintenance, repair/parts, and deployment/operating-hour logs.
+- Explainable Low, Medium, and High risk classification using a decision-tree-style rule model based on equipment age, usage, inspection findings, repair history, operational status, and inspection due dates.
+- Dashboard alerts, readiness overview, charts, analytics, recommendations, and CSV report export.
+- Simulated starter records, consistent with the study limitation that sample data may be used while historical records are limited.
 
----
+The predictive output is advisory. It supports, but does not replace, a maintenance officer’s professional decision. The system uses only manually entered records; it has no real-time IoT/sensor functionality.
 
-## 🚀 Quick Start Guide for Beginners
+## Run locally
 
-Follow these step-by-step instructions to clone the repository and run the application on your local machine.
+```bash
+python -m pip install -r requirements.txt
+python app.py
+```
 
-### Prerequisites
-Make sure you have the following installed on your computer:
-* **Git:** [Download and install Git](https://git-scm.com/)
-* **Python 3.x:** [Download Python](https://www.python.org/) (Ensure you check the box to "Add Python to PATH" during installation).
+Open `http://127.0.0.1:5000`.
 
----
+| Role | Username | Password |
+| --- | --- | --- |
+| Administrator | `admin` | `admin123` |
+| Maintenance Personnel | `maintenance` | `maintenance123` |
+| Station Supervisor (read-only) | `supervisor` | `supervisor123` |
 
-### Step 1: Clone the Repository
-Open your terminal (macOS/Linux) or Command Prompt/Git Bash (Windows) and run the following commands:
-
-1. Clone the project:
-   ```bash
-   git clone [https://github.com/zunigajca/FIRE-PMIS.git](https://github.com/zunigajca/FIRE-PMIS.git)
+The self-contained prototype stores its working data in `instance/fire_pmis.sqlite3`. This makes the capstone immediately runnable without server configuration. For a production deployment matching the paper’s MySQL target, migrate the included table design to MySQL and set managed database credentials before deployment.
